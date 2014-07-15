@@ -19,13 +19,41 @@
 #define __ASSERT_USE_STDERR
 #include <assert.h>
 
+// BOF preprocessor bug prevent - insert me on top of your arduino-code
+// From: http://www.a-control.de/arduino-fehler/?lang=en
+#if 1
+__asm volatile ("nop");
+#endif
+
+/*
+ * Uncomment the following line if you are using the LCD with a Parallax backpack
+ * instead of controlling the display directly from the Minima's ATmega.
+ *
+ * See: http://learn.parallax.com/KickStart/27977
+ */
+#define SERIAL_DISPLAY
+
 /*
  * Wire is only used from the Si570 module but we need to list it here so that
  * the Arduino environment knows we need it.
  */
 
 #include <Wire.h>
-#include <LiquidCrystal.h>
+
+// Setup displays
+#ifdef SERIAL_DISPLAY
+
+#include <SoftwareSerial.h>
+const int DISPpin = 8;
+SoftwareSerial serialDisplay = SoftwareSerial(255,DISPpin);
+
+#else
+
+#include <LiquidCrystal.h> // Compiler errors when not included, even if not using this library
+LiquidCrystal lcd(13, 12, 11, 10, 9, 8);
+
+#endif
+
 
 #include <avr/io.h>
 #include "Si570.h"
@@ -58,7 +86,6 @@ unsigned long vfoA=14200000L, vfoB=14200000L, ritA, ritB;
 unsigned long cwTimeout = 0;
 
 Si570 *vfo;
-LiquidCrystal lcd(13, 12, 11, 10, 9, 8);
 
 int count = 0;
 char b[20], c[20], printBuff[32];
@@ -97,6 +124,34 @@ unsigned ritOn = 0;
 /* dds ddschip(DDS9850, 5, 6, 7, 125000000LL); */
 
 /* display routines */
+#ifdef SERIAL_DISPLAY
+void setupDisplay(){
+  pinMode(DISPpin, OUTPUT);
+  digitalWrite(DISPpin, HIGH);
+  
+  serialDisplay.begin(19200);
+  serialDisplay.write(17);      // Comment to disable backlight
+  delay(5);                     // Required delay
+}
+
+void printLine1(char const *c){
+  if (strcmp(c, printBuff)){
+    serialDisplay.write(12);    // Clear screen
+    serialDisplay.print(c);
+    strcpy(printBuff, c);
+    count++;
+  }
+}
+
+void printLine2(char const *c){
+  serialDisplay.write(13);               // New line
+  serialDisplay.print(c);
+}
+#else
+void setupDisplay(){
+  lcd.begin(16, 2);
+}
+
 void printLine1(char const *c){
   if (strcmp(c, printBuff)){
     lcd.setCursor(0, 0);
@@ -110,6 +165,7 @@ void printLine2(char const *c){
   lcd.setCursor(0, 1);
   lcd.print(c);
 }
+#endif
 
 void displayFrequency(unsigned long f){
   int mhz, khz, hz;
@@ -135,15 +191,17 @@ void setup() {
   // Initialize the Serial port so that we can use it for debugging
   Serial.begin(115200);
   debug("Radiono starting - Version: %s", RADIONO_VERSION);
-  lcd.begin(16, 2);
-
+  setupDisplay();
+  
 #ifdef RUN_TESTS
   run_tests();
 #endif
 
   printBuff[0] = 0;
-  printLine1("Raduino ");
-  lcd.print(RADIONO_VERSION);
+  
+  char dispBuff[16];
+  sprintf(dispBuff, "Raduino %d", RADIONO_VERSION);
+  printLine1(dispBuff);
 
   // The library automatically reads the factory calibration settings of your Si570
   // but it needs to know for what frequency it was calibrated for.
@@ -459,12 +517,12 @@ void __assert(const char *__func, const char *__file, int __lineno, const char *
   debug("ASSERT FAILED - %s (%s:%i): %s", __func, __file, __lineno, __sexp);
   Serial.flush();
   // Show something on the screen
-  lcd.setCursor(0, 0);
-  lcd.print("OOPS ");
-  lcd.print(__file);
-  lcd.setCursor(0, 1);
-  lcd.print("Line: ");
-  lcd.print(__lineno);
+  char dispBuff[16];
+  sprintf(dispBuff, "OOPS %s", __file);
+  printLine1(dispBuff);
+  sprintf(dispBuff, "Line: %d", __lineno);
+  printLine2(dispBuff);
+
   // abort program execution.
   abort();
 }
