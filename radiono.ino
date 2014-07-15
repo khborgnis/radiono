@@ -31,7 +31,7 @@ __asm volatile ("nop");
  *
  * See: http://learn.parallax.com/KickStart/27977
  */
-#define SERIAL_DISPLAY
+//#define SERIAL_DISPLAY
 
 /*
  * Wire is only used from the Si570 module but we need to list it here so that
@@ -200,7 +200,7 @@ void setup() {
   printBuff[0] = 0;
   
   char dispBuff[16];
-  sprintf(dispBuff, "Raduino %d", RADIONO_VERSION);
+  sprintf(dispBuff, "Raduino %s", RADIONO_VERSION);
   printLine1(dispBuff);
 
   // The library automatically reads the factory calibration settings of your Si570
